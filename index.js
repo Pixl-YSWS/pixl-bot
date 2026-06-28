@@ -6,7 +6,31 @@ require("dotenv").config();
 
 const HC_AI_URL = 'https://ai.hackclub.com/proxy/v1/chat/completions';
 const NO_CREDITS = '__NO_CREDITS__';
+
+// --- AI provider config ---
+// If OPENCODE_ZEN_KEY is set, chat completions route through OpenCode Zen
+// (OpenAI-compatible). Otherwise we fall back to the Hack Club AI proxy.
+const ZEN_KEY = process.env.OPENCODE_ZEN_KEY;
+const ZEN_URL = process.env.OPENCODE_ZEN_URL || 'https://opencode.ai/zen/v1/chat/completions';
+
+const ZEN_MODEL_MAP = {
+  'deepseek/deepseek-v4-pro': process.env.ZEN_MODEL_DEEPSEEK || 'opencode/deepseek-v4-flash-free',
+  'deepseek/deepseek-v4-flash-free': process.env.ZEN_MODEL_FLASH_FREE || 'opencode/deepseek-v4-flash-free',
+  'anthropic/claude-haiku-4.5': process.env.ZEN_MODEL_HAIKU || 'opencode/deepseek-v4-flash-free',
+  'anthropic/claude-sonnet-4.5': process.env.ZEN_MODEL_SONNET || 'opencode/deepseek-v4-flash-free',
+  'anthropic/claude-sonnet-4-5': process.env.ZEN_MODEL_SONNET || 'opencode/deepseek-v4-flash-free',
+};
+
 async function aiPost(body) {
+  if (ZEN_KEY) {
+    const zenBody = { ...body, model: ZEN_MODEL_MAP[body.model] || body.model };
+    try {
+      return await axios.post(ZEN_URL, zenBody, { headers: { Authorization: `Bearer ${ZEN_KEY}`, 'Content-Type': 'application/json' } });
+    } catch (e) {
+      if (e.response?.status === 402 || e.response?.status === 429) { const err = new Error('no credits'); err.code = NO_CREDITS; throw err; }
+      throw e;
+    }
+  }
   const primaryKey = process.env.HACKCLUB_AI_KEY;
   const backupKey = process.env.HACKCLUB_AI_KEY_BACKUP;
   try {
